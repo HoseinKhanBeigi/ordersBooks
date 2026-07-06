@@ -6,6 +6,7 @@ import "./style.css";
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "FARTCOINUSDT","XAUUSDT"];
 const DEPTHS: BookDepth[] = [20, 50, 100, 500];
+const SR_COUNTS = [3, 6, 12, 18, 24];
 const SPEEDS: UpdateSpeed[] = ["100ms", "1000ms"];
 const MARKETS: { value: Market; label: string }[] = [
   { value: "spot", label: "Spot" },
@@ -25,6 +26,10 @@ let currentDepth: BookDepth =
     : 50;
 let currentSpeed: UpdateSpeed =
   params.get("speed") === "1000ms" ? "1000ms" : "100ms";
+let currentSrCount =
+  SR_COUNTS.includes(Number(params.get("sr")))
+    ? Number(params.get("sr"))
+    : 12;
 
 if (!SYMBOLS.includes(currentSymbol)) {
   SYMBOLS.push(currentSymbol);
@@ -55,6 +60,9 @@ const marketSelect = document.getElementById("market") as HTMLSelectElement;
 const symbolSelect = document.getElementById("symbol") as HTMLSelectElement;
 const depthSelect = document.getElementById("depth") as HTMLSelectElement;
 const speedSelect = document.getElementById("speed") as HTMLSelectElement;
+const srSelect = document.getElementById("sr") as HTMLSelectElement;
+const legendSupportEl = document.querySelector(".legend-support")!;
+const legendResistanceEl = document.querySelector(".legend-resistance")!;
 
 const chart = new PriceChart(document.getElementById("tv_chart")!);
 let lastSRUpdate = 0;
@@ -86,6 +94,7 @@ symbolSelect.addEventListener("change", () => {
   url.searchParams.set("market", currentMarket);
   url.searchParams.set("depth", String(currentDepth));
   url.searchParams.set("speed", currentSpeed);
+  url.searchParams.set("sr", String(currentSrCount));
   window.open(url.toString(), "_blank");
   symbolSelect.value = currentSymbol;
 });
@@ -100,7 +109,25 @@ speedSelect.addEventListener("change", () => {
   reconnect();
 });
 
+srSelect.addEventListener("change", () => {
+  currentSrCount = Number(srSelect.value);
+  legendSupportEl.textContent = `— Support (top ${currentSrCount} buy walls)`;
+  legendResistanceEl.textContent = `— Resistance (top ${currentSrCount} sell walls)`;
+  syncUrl();
+});
+
+function syncUrl(): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set("market", currentMarket);
+  url.searchParams.set("symbol", currentSymbol);
+  url.searchParams.set("depth", String(currentDepth));
+  url.searchParams.set("speed", currentSpeed);
+  url.searchParams.set("sr", String(currentSrCount));
+  window.history.replaceState(null, "", url);
+}
+
 function reconnect(): void {
+  syncUrl();
   updateStreamUrl();
   stream.updateConfig({
     symbol: currentSymbol,
@@ -203,7 +230,7 @@ function updateSupportResistance(state: OrderBookState): void {
           : bucket.priceFrom > state.midPrice,
       )
       .sort((a, b) => b.sumQty - a.sumQty)
-      .slice(0, 12)
+      .slice(0, currentSrCount)
       .map((bucket) => {
         const levelLabel =
           bucket.levelFrom === bucket.levelTo
@@ -345,6 +372,12 @@ function renderShell(): string {
               ${SPEEDS.map((speed) => `<option value="${speed}"${speed === currentSpeed ? " selected" : ""}>${speed}</option>`).join("")}
             </select>
           </label>
+          <label>
+            Chart lines
+            <select id="sr">
+              ${SR_COUNTS.map((count) => `<option value="${count}"${count === currentSrCount ? " selected" : ""}>Top ${count}</option>`).join("")}
+            </select>
+          </label>
         </div>
       </header>
 
@@ -357,8 +390,8 @@ function renderShell(): string {
         <section class="chart-panel">
           <div id="tv_chart" class="tv-chart"></div>
           <div class="chart-legend">
-            <span class="legend-item legend-support">— Support (buy walls)</span>
-            <span class="legend-item legend-resistance">— Resistance (sell walls)</span>
+            <span class="legend-item legend-support">— Support (top ${currentSrCount} buy walls)</span>
+            <span class="legend-item legend-resistance">— Resistance (top ${currentSrCount} sell walls)</span>
           </div>
         </section>
 
