@@ -203,7 +203,7 @@ function updateSupportResistance(state: OrderBookState): void {
           : bucket.priceFrom > state.midPrice,
       )
       .sort((a, b) => b.sumQty - a.sumQty)
-      .slice(0, 9)
+      .slice(0, 12)
       .map((bucket) => {
         const levelLabel =
           bucket.levelFrom === bucket.levelTo
