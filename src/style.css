@@ -1,0 +1,394 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #0b0e11;
+  --surface: #141820;
+  --border: #1e2430;
+  --text: #eaecef;
+  --muted: #848e9c;
+  --bid: #0ecb81;
+  --ask: #f6465d;
+  --accent: #f0b90b;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --sans: "Inter", system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+.layout {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2rem;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.chart-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  height: 640px;
+  position: sticky;
+  top: 1rem;
+}
+
+.tv-chart {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.7rem;
+}
+
+.legend-support {
+  color: var(--bid);
+}
+
+.legend-resistance {
+  color: var(--ask);
+}
+
+.book-side {
+  min-width: 0;
+}
+
+@media (max-width: 980px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-panel {
+    height: 420px;
+    position: static;
+  }
+}
+
+.header {
+  margin-bottom: 1.25rem;
+}
+
+.brand h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.controls {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  flex: 1;
+  min-width: 90px;
+}
+
+.controls select {
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.controls select:hover {
+  border-color: var(--muted);
+}
+
+.stream-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+#status {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+#status[data-status="connected"] {
+  color: var(--bid);
+  border-color: rgba(14, 203, 129, 0.3);
+}
+
+#status[data-status="connecting"],
+#status[data-status="syncing"] {
+  color: var(--accent);
+  border-color: rgba(240, 185, 11, 0.3);
+}
+
+#status[data-status="disconnected"],
+#status[data-status="error"] {
+  color: var(--ask);
+  border-color: rgba(246, 70, 93, 0.3);
+}
+
+#stream-url {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+/* Who's winning banner */
+.verdict-panel {
+  margin: 0 0 1rem;
+  position: sticky;
+  top: 1rem;
+  z-index: 5;
+  background: var(--bg);
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+@media (max-width: 980px) {
+  .verdict-panel {
+    position: static;
+  }
+}
+
+.battle-verdict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.verdict-buy {
+  color: var(--bid);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.verdict-sell {
+  color: var(--ask);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.verdict-headline {
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.battle-verdict[data-leader="bid"] .verdict-headline {
+  color: var(--bid);
+}
+
+.battle-verdict[data-leader="ask"] .verdict-headline {
+  color: var(--ask);
+}
+
+.battle-verdict[data-leader="even"] .verdict-headline {
+  color: var(--muted);
+}
+
+.battle-bar {
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.battle-fill {
+  height: 100%;
+  transition: width 0.2s ease;
+}
+
+.bid-fill {
+  background: var(--bid);
+}
+
+.ask-fill {
+  background: var(--ask);
+}
+
+.near-title {
+  margin-top: 0.9rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Order book */
+.orderbook {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.col-head {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.col-head span:nth-child(3),
+.col-head span:nth-child(4) {
+  text-align: right;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.5rem 1fr 1fr 1fr;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.3rem 0.75rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+
+.row-levels {
+  position: relative;
+  z-index: 1;
+  font-size: 0.62rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.row-price {
+  position: relative;
+  z-index: 1;
+  font-weight: 500;
+}
+
+.row-size,
+.row-sum {
+  position: relative;
+  z-index: 1;
+  text-align: right;
+  color: var(--text);
+}
+
+.row-sum {
+  color: var(--muted);
+}
+
+/* the bar grows from the right — longer bar = bigger wall */
+.row-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  right: 0;
+  z-index: 0;
+  border-radius: 3px 0 0 3px;
+  pointer-events: none;
+}
+
+.ask-row .row-price {
+  color: var(--ask);
+}
+
+.ask-row .row-bar {
+  background: rgba(246, 70, 93, 0.18);
+}
+
+.bid-row .row-price {
+  color: var(--bid);
+}
+
+.bid-row .row-bar {
+  background: rgba(14, 203, 129, 0.18);
+}
+
+.mid-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.mid-price {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.spread-value {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.depth-meta {
+  margin-top: 0.75rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+}
