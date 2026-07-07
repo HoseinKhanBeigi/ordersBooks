@@ -1,5 +1,6 @@
 import { BinanceDepthStream, type ConnectionStatus } from "./depthStream";
 import { PriceChart, type SRLevel } from "./chart";
+import { formatUtcClock, getActiveSessionLabels, getSessionStatuses } from "./sessions";
 import type { BookDepth, Market, OrderBookState, UpdateSpeed, WallBucket } from "./types";
 import { buildStreamUrl } from "./types";
 import "./style.css";
@@ -63,6 +64,9 @@ const speedSelect = document.getElementById("speed") as HTMLSelectElement;
 const srSelect = document.getElementById("sr") as HTMLSelectElement;
 const legendSupportEl = document.querySelector(".legend-support")!;
 const legendResistanceEl = document.querySelector(".legend-resistance")!;
+const sessionsEl = document.getElementById("sessions")!;
+const sessionsUtcEl = document.getElementById("sessions-utc")!;
+const sessionsSummaryEl = document.getElementById("sessions-summary")!;
 
 const chart = new PriceChart(document.getElementById("tv_chart")!);
 let lastSRUpdate = 0;
@@ -339,6 +343,33 @@ function renderWalls(state: OrderBookState): void {
     <span class="verdict-sell">Sellers ${askPct}%</span>`;
 }
 
+function renderSessions(): void {
+  const now = new Date();
+  const statuses = getSessionStatuses(now);
+  const active = getActiveSessionLabels(now);
+
+  sessionsUtcEl.textContent = `UTC ${formatUtcClock(now)}`;
+  sessionsSummaryEl.textContent =
+    active.length > 0
+      ? `Active: ${active.join(" + ")}`
+      : "All sessions closed — lower liquidity window";
+
+  sessionsEl.innerHTML = statuses
+    .map(
+      (session) => `
+    <div class="session-card${session.isOpen ? " session-open" : ""}" data-session="${session.id}">
+      <div class="session-head">
+        <span class="session-dot" aria-hidden="true"></span>
+        <span class="session-name">${session.label}</span>
+        <span class="session-state">${session.isOpen ? "Open" : "Closed"}</span>
+      </div>
+      <div class="session-time">${session.localTime}</div>
+      <div class="session-hours">${session.hoursLabel}</div>
+    </div>`,
+    )
+    .join("");
+}
+
 function renderShell(): string {
   return `
     <div class="layout">
@@ -384,6 +415,15 @@ function renderShell(): string {
       <section class="stream-info">
         <span id="status" data-status="connecting">Connecting…</span>
         <code id="stream-url"></code>
+      </section>
+
+      <section class="sessions-panel">
+        <div class="sessions-head">
+          <span class="sessions-title">Trading sessions</span>
+          <span id="sessions-utc" class="sessions-utc">UTC —</span>
+        </div>
+        <div id="sessions" class="sessions-grid"></div>
+        <p id="sessions-summary" class="sessions-summary"></p>
       </section>
 
       <div class="workspace">
@@ -436,6 +476,8 @@ function renderShell(): string {
 }
 
 updateStreamUrl();
+renderSessions();
+window.setInterval(renderSessions, 30_000);
 stream.connect();
 void chart.load(currentSymbol, currentMarket);
 

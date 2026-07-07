@@ -182,6 +182,118 @@ body {
   word-break: break-all;
 }
 
+.sessions-panel {
+  margin: 0.9rem 0 1.1rem;
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.sessions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.sessions-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.sessions-utc {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.sessions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+@media (max-width: 720px) {
+  .sessions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.session-card {
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  opacity: 0.72;
+}
+
+.session-card.session-open {
+  opacity: 1;
+  border-color: rgba(14, 203, 129, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(14, 203, 129, 0.08);
+}
+
+.session-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
+}
+
+.session-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.session-open .session-dot {
+  background: var(--bid);
+  box-shadow: 0 0 6px rgba(14, 203, 129, 0.6);
+}
+
+.session-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.session-state {
+  margin-left: auto;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.session-open .session-state {
+  color: var(--bid);
+}
+
+.session-time {
+  font-family: var(--mono);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.session-hours {
+  margin-top: 0.15rem;
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.sessions-summary {
+  margin-top: 0.55rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+}
+
 /* Who's winning banner */
 .verdict-panel {
   margin: 0 0 1rem;
