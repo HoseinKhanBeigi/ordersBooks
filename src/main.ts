@@ -8,6 +8,7 @@ import "./style.css";
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "FARTCOINUSDT","XAUUSDT"];
 const DEPTHS: BookDepth[] = [20, 50, 100, 500];
 const SR_COUNTS = [1,2,3,4,5,6, 12, 18, 24];
+const TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SPEEDS: UpdateSpeed[] = ["100ms", "1000ms"];
 const MARKETS: { value: Market; label: string }[] = [ 
   { value: "spot", label: "Spot" },
@@ -31,6 +32,9 @@ let currentSrCount =
   SR_COUNTS.includes(Number(params.get("sr")))
     ? Number(params.get("sr"))
     : 12;
+let currentTimeframe = TIMEFRAMES.includes(params.get("tf") ?? "")
+  ? (params.get("tf") as string)
+  : "15m";
 
 if (!SYMBOLS.includes(currentSymbol)) {
   SYMBOLS.push(currentSymbol);
@@ -58,6 +62,7 @@ const symbolSelect = document.getElementById("symbol") as HTMLSelectElement;
 const depthSelect = document.getElementById("depth") as HTMLSelectElement;
 const speedSelect = document.getElementById("speed") as HTMLSelectElement;
 const srSelect = document.getElementById("sr") as HTMLSelectElement;
+const timeframeSelect = document.getElementById("timeframe") as HTMLSelectElement;
 const legendSupportEl = document.querySelector(".legend-support")!;
 const legendResistanceEl = document.querySelector(".legend-resistance")!;
 const sessionsEl = document.getElementById("sessions")!;
@@ -94,6 +99,7 @@ symbolSelect.addEventListener("change", () => {
   url.searchParams.set("depth", String(currentDepth));
   url.searchParams.set("speed", currentSpeed);
   url.searchParams.set("sr", String(currentSrCount));
+  url.searchParams.set("tf", currentTimeframe);
   window.open(url.toString(), "_blank");
   symbolSelect.value = currentSymbol;
 });
@@ -115,6 +121,12 @@ srSelect.addEventListener("change", () => {
   syncUrl();
 });
 
+timeframeSelect.addEventListener("change", () => {
+  currentTimeframe = timeframeSelect.value;
+  syncUrl();
+  void chart.load(currentSymbol, currentMarket, currentTimeframe);
+});
+
 function syncUrl(): void {
   const url = new URL(window.location.href);
   url.searchParams.set("market", currentMarket);
@@ -122,6 +134,7 @@ function syncUrl(): void {
   url.searchParams.set("depth", String(currentDepth));
   url.searchParams.set("speed", currentSpeed);
   url.searchParams.set("sr", String(currentSrCount));
+  url.searchParams.set("tf", currentTimeframe);
   window.history.replaceState(null, "", url);
 }
 
@@ -134,7 +147,7 @@ function reconnect(): void {
     speed: currentSpeed,
     market: currentMarket,
   });
-  void chart.load(currentSymbol, currentMarket);
+  void chart.load(currentSymbol, currentMarket, currentTimeframe);
 }
 
 function updateStreamUrl(): void {
@@ -358,6 +371,12 @@ function renderShell(): string {
               ${SR_COUNTS.map((count) => `<option value="${count}"${count === currentSrCount ? " selected" : ""}>Top ${count}</option>`).join("")}
             </select>
           </label>
+          <label>
+            Timeframe
+            <select id="timeframe">
+              ${TIMEFRAMES.map((tf) => `<option value="${tf}"${tf === currentTimeframe ? " selected" : ""}>${tf}</option>`).join("")}
+            </select>
+          </label>
         </div>
       </header>
 
@@ -421,6 +440,6 @@ updateStreamUrl();
 renderSessions();
 window.setInterval(renderSessions, 30_000);
 stream.connect();
-void chart.load(currentSymbol, currentMarket);
+void chart.load(currentSymbol, currentMarket, currentTimeframe);
 
 window.addEventListener("beforeunload", () => stream.disconnect());

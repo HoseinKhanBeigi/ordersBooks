@@ -19,10 +19,18 @@ export interface SRLevel {
 
 type KlineTuple = [number, string, string, string, string, string, ...unknown[]];
 
-const INTERVAL = "15m";
-const INTERVAL_SECONDS = 15 * 60;
 // Shift timestamps so the axis reads in UTC+3:30 (Iran time)
 const TZ_OFFSET_SECONDS = Math.round(3.5 * 3600);
+
+const INTERVAL_SECONDS: Record<string, number> = {
+  "1m": 60,
+  "5m": 5 * 60,
+  "15m": 15 * 60,
+  "30m": 30 * 60,
+  "1h": 60 * 60,
+  "4h": 4 * 60 * 60,
+  "1d": 24 * 60 * 60,
+};
 
 export class PriceChart {
   private chart: IChartApi;
@@ -32,6 +40,8 @@ export class PriceChart {
   private lastBar: CandlestickData | null = null;
   private generation = 0;
   private ready = false;
+  private interval = "15m";
+  private intervalSeconds = INTERVAL_SECONDS["15m"];
 
   constructor(container: HTMLElement) {
     this.chart = createChart(container, {
@@ -59,13 +69,15 @@ export class PriceChart {
     });
   }
 
-  async load(symbol: string, market: Market): Promise<void> {
+  async load(symbol: string, market: Market, interval = this.interval): Promise<void> {
     const generation = ++this.generation;
     this.ready = false;
+    this.interval = interval;
+    this.intervalSeconds = INTERVAL_SECONDS[interval] ?? INTERVAL_SECONDS["15m"];
     this.stopPolling();
     this.clearLines();
 
-    const candles = await fetchKlines(symbol, market, 300);
+    const candles = await fetchKlines(symbol, market, interval, 300);
     if (generation !== this.generation) return;
 
     this.series.setData(candles);
@@ -89,8 +101,8 @@ export class PriceChart {
   updateLivePrice(price: number): void {
     if (!this.ready || !this.lastBar || !Number.isFinite(price) || price <= 0) return;
 
-    const bucket = (Math.floor(Date.now() / 1000 / INTERVAL_SECONDS) *
-      INTERVAL_SECONDS +
+    const bucket = (Math.floor(Date.now() / 1000 / this.intervalSeconds) *
+      this.intervalSeconds +
       TZ_OFFSET_SECONDS) as UTCTimestamp;
 
     if (bucket < (this.lastBar.time as number)) return;
@@ -141,10 +153,11 @@ export class PriceChart {
   }
 
   private startPolling(symbol: string, market: Market, generation: number): void {
+    const interval = this.interval;
     const poll = async (): Promise<void> => {
       if (generation !== this.generation) return;
       try {
-        const candles = await fetchKlines(symbol, market, 2);
+        const candles = await fetchKlines(symbol, market, interval, 2);
         if (generation !== this.generation) return;
         for (const candle of candles) {
           this.series.update(candle);
@@ -188,6 +201,7 @@ function decimalsFor(price: number): number {
 async function fetchKlines(
   symbol: string,
   market: Market,
+  interval: string,
   limit: number,
 ): Promise<CandlestickData[]> {
   const base =
@@ -195,7 +209,7 @@ async function fetchKlines(
       ? "https://fapi.binance.com/fapi/v1/klines"
       : "https://api.binance.com/api/v3/klines";
   const response = await fetch(
-    `${base}?symbol=${symbol.toUpperCase()}&interval=${INTERVAL}&limit=${limit}`,
+    `${base}?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`,
   );
   if (!response.ok) throw new Error(`Klines failed (${response.status})`);
 
