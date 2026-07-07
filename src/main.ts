@@ -6,9 +6,9 @@ import "./style.css";
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "FARTCOINUSDT","XAUUSDT"];
 const DEPTHS: BookDepth[] = [20, 50, 100, 500];
-const SR_COUNTS = [3, 6, 12, 18, 24];
+const SR_COUNTS = [1,2,3,4,5,6, 12, 18, 24];
 const SPEEDS: UpdateSpeed[] = ["100ms", "1000ms"];
-const MARKETS: { value: Market; label: string }[] = [
+const MARKETS: { value: Market; label: string }[] = [ 
   { value: "spot", label: "Spot" },
   { value: "futures", label: "Futures" },
 ];
