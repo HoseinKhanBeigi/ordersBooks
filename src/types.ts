@@ -65,6 +65,22 @@ export function buildStreamUrl(config: StreamConfig): string {
   return `wss://stream.binance.com:9443/ws/${symbol}@depth${speedSuffix}`;
 }
 
+export function buildAggTradeUrl(symbol: string, market: Market): string {
+  const lower = symbol.toLowerCase();
+  if (market === "futures") {
+    return `wss://fstream.binance.com/ws/${lower}@aggTrade`;
+  }
+  return `wss://stream.binance.com:9443/ws/${lower}@aggTrade`;
+}
+
+export function aggTradesRestUrl(symbol: string, market: Market, limit: number): string {
+  const upper = symbol.toUpperCase();
+  if (market === "futures") {
+    return `https://fapi.binance.com/fapi/v1/aggTrades?symbol=${upper}&limit=${limit}`;
+  }
+  return `https://api.binance.com/api/v3/aggTrades?symbol=${upper}&limit=${limit}`;
+}
+
 export function depthRestUrl(
   symbol: string,
   limit: number,

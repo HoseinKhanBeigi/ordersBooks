@@ -1,6 +1,7 @@
 import { BinanceDepthStream, type ConnectionStatus } from "./depthStream";
 import { PriceChart, type SRLevel } from "./chart";
 import { formatUtcClock, getActiveSessionLabels, getSessionStatuses } from "./sessions";
+import { BinanceTradeStream, type TradeFlowState } from "./tradeStream";
 import type { BookDepth, Market, OrderBookState, UpdateSpeed, WallBucket } from "./types";
 import { buildStreamUrl } from "./types";
 import "./style.css";
@@ -51,10 +52,15 @@ const spreadEl = document.getElementById("spread")!;
 const midPriceEl = document.getElementById("mid-price")!;
 const asksWalls = document.getElementById("asks-walls")!;
 const bidsWalls = document.getElementById("bids-walls")!;
-const battleBar = document.getElementById("battle-bar")!;
-const battleBid = document.getElementById("battle-bid")!;
-const battleAsk = document.getElementById("battle-ask")!;
-const battleVerdict = document.getElementById("battle-verdict")!;
+const aggressionHeadlineEl = document.getElementById("aggression-headline")!;
+const cvdValueEl = document.getElementById("cvd-value")!;
+const cvdSlopeEl = document.getElementById("cvd-slope")!;
+const aggressionBar = document.getElementById("aggression-bar")!;
+const aggressionBuy = document.getElementById("aggression-buy")!;
+const aggressionSell = document.getElementById("aggression-sell")!;
+const aggressionMetaEl = document.getElementById("aggression-meta")!;
+const tapeEl = document.getElementById("tape")!;
+const tradeStatusEl = document.getElementById("trade-status")!;
 const depthMetaEl = document.getElementById("depth-meta")!;
 const priceHeadEl = document.getElementById("price-head")!;
 const marketSelect = document.getElementById("market") as HTMLSelectElement;
@@ -85,6 +91,22 @@ const stream = new BinanceDepthStream(
     },
   },
 );
+
+const tradeStream = new BinanceTradeStream({
+  onUpdate: (state) => {
+    renderAggression(state);
+  },
+  onStatus: (status) => {
+    const labels = {
+      connecting: "Trades connecting…",
+      connected: "Trades live",
+      disconnected: "Trades disconnected",
+      error: "Trades error",
+    };
+    tradeStatusEl.textContent = labels[status];
+    tradeStatusEl.dataset.status = status;
+  },
+});
 
 marketSelect.addEventListener("change", () => {
   currentMarket = marketSelect.value as Market;
@@ -147,6 +169,7 @@ function reconnect(): void {
     speed: currentSpeed,
     market: currentMarket,
   });
+  tradeStream.updateConfig(currentSymbol, currentMarket);
   void chart.load(currentSymbol, currentMarket, currentTimeframe);
 }
 
@@ -260,6 +283,66 @@ function updateSupportResistance(state: OrderBookState): void {
   );
 }
 
+function formatTradeTime(timestamp: number): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tehran",
+  }).format(new Date(timestamp));
+}
+
+function formatSignedDelta(value: number): string {
+  const prefix = value > 0 ? "+" : value < 0 ? "−" : "";
+  return `${prefix}${formatCompact(Math.abs(value))}`;
+}
+
+function renderAggression(state: TradeFlowState): void {
+  aggressionHeadlineEl.textContent = state.aggressionLabel;
+  aggressionHeadlineEl.dataset.leader = state.aggression;
+
+  cvdValueEl.textContent = formatSignedDelta(state.cvd);
+  cvdValueEl.dataset.leader =
+    state.cvd > 0 ? "buy" : state.cvd < 0 ? "sell" : "even";
+
+  const slopeLabel =
+    state.cvdSlope > 0
+      ? `↑ +${formatCompact(state.cvdSlope)} (30s)`
+      : state.cvdSlope < 0
+        ? `↓ −${formatCompact(Math.abs(state.cvdSlope))} (30s)`
+        : "→ flat (30s)";
+  cvdSlopeEl.textContent = slopeLabel;
+  cvdSlopeEl.dataset.leader =
+    state.cvdSlope > 0 ? "buy" : state.cvdSlope < 0 ? "sell" : "even";
+
+  const recentTotal = state.recentBuyVolume + state.recentSellVolume;
+  const buyPct = recentTotal > 0 ? (state.recentBuyVolume / recentTotal) * 100 : 50;
+  const sellPct = recentTotal > 0 ? (state.recentSellVolume / recentTotal) * 100 : 50;
+  aggressionBuy.style.width = `${buyPct}%`;
+  aggressionSell.style.width = `${sellPct}%`;
+  aggressionBar.dataset.leader = state.aggression;
+
+  aggressionMetaEl.innerHTML = `
+    <span class="verdict-buy">Market buys ${formatCompact(state.recentBuyVolume)}</span>
+    <span class="verdict-sell">Market sells ${formatCompact(state.recentSellVolume)}</span>`;
+
+  tapeEl.innerHTML =
+    state.tape.length === 0
+      ? `<div class="tape-empty">Waiting for trades…</div>`
+      : state.tape
+          .map(
+            (trade) => `
+    <div class="tape-row ${trade.side}-tape">
+      <span class="tape-time">${formatTradeTime(trade.time)}</span>
+      <span class="tape-price">${formatPrice(trade.price)}</span>
+      <span class="tape-size">${formatCompact(trade.quantity)}</span>
+      <span class="tape-side">${trade.side === "buy" ? "BUY" : "SELL"}</span>
+    </div>`,
+          )
+          .join("");
+}
+
 function renderWalls(state: OrderBookState): void {
   spreadEl.textContent = `Spread ${formatPrice(state.spread)}`;
   midPriceEl.textContent = formatPrice(state.midPrice);
@@ -280,29 +363,6 @@ function renderWalls(state: OrderBookState): void {
   bidsWalls.innerHTML = state.bidBuckets
     .map((bucket) => renderBucketRow(bucket, "bid"))
     .join("");
-
-  battleBid.style.width = `${state.bidStrength}%`;
-  battleAsk.style.width = `${state.askStrength}%`;
-
-  const bidPct = state.bidStrength.toFixed(0);
-  const askPct = state.askStrength.toFixed(0);
-
-  let leader: "bid" | "ask" | "even" = "even";
-  let headline = "Buyers and sellers balanced";
-  if (state.bidStrength > state.askStrength + 2) {
-    leader = "bid";
-    headline = `Buyers stronger (${bidPct}%)`;
-  } else if (state.askStrength > state.bidStrength + 2) {
-    leader = "ask";
-    headline = `Sellers stronger (${askPct}%)`;
-  }
-
-  battleBar.dataset.leader = leader;
-  battleVerdict.dataset.leader = leader;
-  battleVerdict.innerHTML = `
-    <span class="verdict-buy">Buyers ${bidPct}%</span>
-    <span class="verdict-headline">${headline}</span>
-    <span class="verdict-sell">Sellers ${askPct}%</span>`;
 }
 
 function renderSessions(): void {
@@ -382,6 +442,7 @@ function renderShell(): string {
 
       <section class="stream-info">
         <span id="status" data-status="connecting">Connecting…</span>
+        <span id="trade-status" data-status="connecting">Trades connecting…</span>
         <code id="stream-url"></code>
       </section>
 
@@ -404,12 +465,37 @@ function renderShell(): string {
         </section>
 
         <div class="book-side">
-          <section class="verdict-panel">
-            <div id="battle-verdict" class="battle-verdict"></div>
-            <div id="battle-bar" class="battle-bar">
-              <div id="battle-bid" class="battle-fill bid-fill"></div>
-              <div id="battle-ask" class="battle-fill ask-fill"></div>
+          <section class="aggression-panel">
+            <div class="aggression-head">
+              <span class="aggression-title">Market aggression</span>
+              <span class="aggression-subtitle">Resting orders are passive · market orders hit them</span>
             </div>
+
+            <div id="aggression-headline" class="aggression-headline" data-leader="even">Balanced aggression</div>
+
+            <div class="cvd-row">
+              <div class="cvd-block">
+                <span class="cvd-label">CVD</span>
+                <span id="cvd-value" class="cvd-value" data-leader="even">0</span>
+              </div>
+              <div id="cvd-slope" class="cvd-slope" data-leader="even">→ flat (30s)</div>
+            </div>
+
+            <div class="fight-row-label">Last 60s market volume</div>
+            <div id="aggression-meta" class="aggression-meta"></div>
+            <div id="aggression-bar" class="battle-bar">
+              <div id="aggression-buy" class="battle-fill bid-fill"></div>
+              <div id="aggression-sell" class="battle-fill ask-fill"></div>
+            </div>
+
+            <div class="fight-row-label">Time &amp; Sales</div>
+            <div class="tape-head">
+              <span>Time</span>
+              <span>Price</span>
+              <span>Size</span>
+              <span>Side</span>
+            </div>
+            <div id="tape" class="tape"></div>
           </section>
 
           <main class="orderbook">
@@ -440,6 +526,10 @@ updateStreamUrl();
 renderSessions();
 window.setInterval(renderSessions, 30_000);
 stream.connect();
+tradeStream.connect(currentSymbol, currentMarket);
 void chart.load(currentSymbol, currentMarket, currentTimeframe);
 
-window.addEventListener("beforeunload", () => stream.disconnect());
+window.addEventListener("beforeunload", () => {
+  stream.disconnect();
+  tradeStream.disconnect();
+});
