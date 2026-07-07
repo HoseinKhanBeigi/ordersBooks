@@ -51,10 +51,6 @@ const battleBar = document.getElementById("battle-bar")!;
 const battleBid = document.getElementById("battle-bid")!;
 const battleAsk = document.getElementById("battle-ask")!;
 const battleVerdict = document.getElementById("battle-verdict")!;
-const nearBar = document.getElementById("near-bar")!;
-const nearBid = document.getElementById("near-bid")!;
-const nearAsk = document.getElementById("near-ask")!;
-const nearVerdict = document.getElementById("near-verdict")!;
 const depthMetaEl = document.getElementById("depth-meta")!;
 const priceHeadEl = document.getElementById("price-head")!;
 const marketSelect = document.getElementById("market") as HTMLSelectElement;
@@ -76,7 +72,6 @@ const stream = new BinanceDepthStream(
   {
     onUpdate: (state) => {
       renderWalls(state);
-      updateNearStrength(state);
       updateSupportResistance(state);
       chart.updateLivePrice(state.midPrice);
     },
@@ -252,52 +247,6 @@ function updateSupportResistance(state: OrderBookState): void {
   );
 }
 
-function sumFirstLevels(buckets: WallBucket[], levels: number): number {
-  let sum = 0;
-  let covered = 0;
-  for (const bucket of buckets) {
-    const bucketLevels = bucket.levelTo - bucket.levelFrom + 1;
-    if (covered + bucketLevels <= levels) {
-      sum += bucket.sumQty;
-      covered += bucketLevels;
-    } else {
-      const need = levels - covered;
-      sum += bucket.sumQty * (need / bucketLevels);
-      break;
-    }
-    if (covered >= levels) break;
-  }
-  return sum;
-}
-
-function updateNearStrength(state: OrderBookState): void {
-  const bidTop = sumFirstLevels(state.bidBuckets, 4);
-  const askTop = sumFirstLevels(state.askBuckets, 4);
-  const total = bidTop + askTop;
-  const bidPct = total > 0 ? (bidTop / total) * 100 : 50;
-  const askPct = total > 0 ? (askTop / total) * 100 : 50;
-
-  nearBid.style.width = `${bidPct}%`;
-  nearAsk.style.width = `${askPct}%`;
-
-  let leader: "bid" | "ask" | "even" = "even";
-  let headline = "Balanced";
-  if (bidPct > askPct + 2) {
-    leader = "bid";
-    headline = `Buyers stronger (${bidPct.toFixed(0)}%)`;
-  } else if (askPct > bidPct + 2) {
-    leader = "ask";
-    headline = `Sellers stronger (${askPct.toFixed(0)}%)`;
-  }
-
-  nearBar.dataset.leader = leader;
-  nearVerdict.dataset.leader = leader;
-  nearVerdict.innerHTML = `
-    <span class="verdict-buy">Buy ${formatCompact(bidTop)}</span>
-    <span class="verdict-headline">${headline}</span>
-    <span class="verdict-sell">Sell ${formatCompact(askTop)}</span>`;
-}
-
 function renderWalls(state: OrderBookState): void {
   spreadEl.textContent = `Spread ${formatPrice(state.spread)}`;
   midPriceEl.textContent = formatPrice(state.midPrice);
@@ -441,13 +390,6 @@ function renderShell(): string {
             <div id="battle-bar" class="battle-bar">
               <div id="battle-bid" class="battle-fill bid-fill"></div>
               <div id="battle-ask" class="battle-fill ask-fill"></div>
-            </div>
-
-            <div class="near-title">Levels 1 + 2 + 3 + 4 combined — who's stronger</div>
-            <div id="near-verdict" class="battle-verdict"></div>
-            <div id="near-bar" class="battle-bar">
-              <div id="near-bid" class="battle-fill bid-fill"></div>
-              <div id="near-ask" class="battle-fill ask-fill"></div>
             </div>
           </section>
 
