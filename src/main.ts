@@ -1,14 +1,13 @@
 import { BinanceDepthStream, type ConnectionStatus } from "./depthStream";
 import { PriceChart, type SRLevel } from "./chart";
 import { formatUtcClock, getActiveSessionLabels, getSessionStatuses } from "./sessions";
-import { BinanceTradeStream, type TradeFlowState } from "./tradeStream";
 import type { BookDepth, Market, OrderBookState, UpdateSpeed, WallBucket } from "./types";
 import { buildStreamUrl } from "./types";
 import "./style.css";
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "FARTCOINUSDT","XAUUSDT"];
 const DEPTHS: BookDepth[] = [20, 50, 100, 500];
-const SR_COUNTS = [1,2,3,4,5,6, 12, 18, 24];
+const SR_COUNTS = [1, 2, 3, 4, 5, 6, 12, 18, 24];
 const TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SPEEDS: UpdateSpeed[] = ["100ms", "1000ms"];
 const MARKETS: { value: Market; label: string }[] = [ 
@@ -52,15 +51,6 @@ const spreadEl = document.getElementById("spread")!;
 const midPriceEl = document.getElementById("mid-price")!;
 const asksWalls = document.getElementById("asks-walls")!;
 const bidsWalls = document.getElementById("bids-walls")!;
-const aggressionHeadlineEl = document.getElementById("aggression-headline")!;
-const cvdValueEl = document.getElementById("cvd-value")!;
-const cvdSlopeEl = document.getElementById("cvd-slope")!;
-const aggressionBar = document.getElementById("aggression-bar")!;
-const aggressionBuy = document.getElementById("aggression-buy")!;
-const aggressionSell = document.getElementById("aggression-sell")!;
-const aggressionMetaEl = document.getElementById("aggression-meta")!;
-const tapeEl = document.getElementById("tape")!;
-const tradeStatusEl = document.getElementById("trade-status")!;
 const depthMetaEl = document.getElementById("depth-meta")!;
 const priceHeadEl = document.getElementById("price-head")!;
 const marketSelect = document.getElementById("market") as HTMLSelectElement;
@@ -92,22 +82,6 @@ const stream = new BinanceDepthStream(
   },
 );
 
-const tradeStream = new BinanceTradeStream({
-  onUpdate: (state) => {
-    renderAggression(state);
-  },
-  onStatus: (status) => {
-    const labels = {
-      connecting: "Trades connecting…",
-      connected: "Trades live",
-      disconnected: "Trades disconnected",
-      error: "Trades error",
-    };
-    tradeStatusEl.textContent = labels[status];
-    tradeStatusEl.dataset.status = status;
-  },
-});
-
 marketSelect.addEventListener("change", () => {
   currentMarket = marketSelect.value as Market;
   reconnect();
@@ -138,8 +112,7 @@ speedSelect.addEventListener("change", () => {
 
 srSelect.addEventListener("change", () => {
   currentSrCount = Number(srSelect.value);
-  legendSupportEl.textContent = `— Support (top ${currentSrCount} buy walls)`;
-  legendResistanceEl.textContent = `— Resistance (top ${currentSrCount} sell walls)`;
+  updateLegend();
   syncUrl();
 });
 
@@ -169,7 +142,6 @@ function reconnect(): void {
     speed: currentSpeed,
     market: currentMarket,
   });
-  tradeStream.updateConfig(currentSymbol, currentMarket);
   void chart.load(currentSymbol, currentMarket, currentTimeframe);
 }
 
@@ -241,7 +213,6 @@ function renderBucketRow(
     bucket.levelFrom === bucket.levelTo
       ? `Price level ${bucket.levelFrom}`
       : `Price levels ${bucket.levelFrom} to ${bucket.levelTo} added together`;
-
   return `
     <div class="row ${side}-row">
       <span class="row-levels" title="${levelTitle}">${levelLabel}</span>
@@ -252,95 +223,43 @@ function renderBucketRow(
     </div>`;
 }
 
+function updateLegend(): void {
+  legendSupportEl.textContent = `— Support (top ${currentSrCount} buy walls)`;
+  legendResistanceEl.textContent = `— Resistance (top ${currentSrCount} sell walls)`;
+}
+
+function bucketToSrLevel(bucket: WallBucket): SRLevel {
+  const levelLabel =
+    bucket.levelFrom === bucket.levelTo
+      ? `L${bucket.levelFrom}`
+      : `L${bucket.levelFrom}–${bucket.levelTo}`;
+  return {
+    price: bucket.priceFrom,
+    label: `${levelLabel} · ${formatPrice(bucket.priceFrom)} · ${formatCompact(bucket.sumQty)} · Σ${formatCompact(bucket.cumulative)}`,
+  };
+}
+
 function updateSupportResistance(state: OrderBookState): void {
   const now = Date.now();
   if (now - lastSRUpdate < 250) return;
   lastSRUpdate = now;
 
+  const isOnSide = (bucket: WallBucket, side: "bid" | "ask"): boolean =>
+    side === "bid"
+      ? bucket.priceFrom < state.midPrice
+      : bucket.priceFrom > state.midPrice;
+
   const toLevels = (buckets: WallBucket[], side: "bid" | "ask"): SRLevel[] =>
     [...buckets]
-      .filter((bucket) =>
-        side === "bid"
-          ? bucket.priceFrom < state.midPrice
-          : bucket.priceFrom > state.midPrice,
-      )
+      .filter((bucket) => isOnSide(bucket, side))
       .sort((a, b) => b.sumQty - a.sumQty)
       .slice(0, currentSrCount)
-      .map((bucket) => {
-        const levelLabel =
-          bucket.levelFrom === bucket.levelTo
-            ? `L${bucket.levelFrom}`
-            : `L${bucket.levelFrom}–${bucket.levelTo}`;
-        return {
-          price: bucket.priceFrom,
-          label: `${levelLabel} · ${formatPrice(bucket.priceFrom)} · ${formatCompact(bucket.sumQty)} · Σ${formatCompact(bucket.cumulative)}`,
-        };
-      });
+      .map(bucketToSrLevel);
 
   chart.setSupportResistance(
     toLevels(state.bidBuckets, "bid"),
     toLevels(state.askBuckets, "ask"),
   );
-}
-
-function formatTradeTime(timestamp: number): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Tehran",
-  }).format(new Date(timestamp));
-}
-
-function formatSignedDelta(value: number): string {
-  const prefix = value > 0 ? "+" : value < 0 ? "−" : "";
-  return `${prefix}${formatCompact(Math.abs(value))}`;
-}
-
-function renderAggression(state: TradeFlowState): void {
-  aggressionHeadlineEl.textContent = state.aggressionLabel;
-  aggressionHeadlineEl.dataset.leader = state.aggression;
-
-  cvdValueEl.textContent = formatSignedDelta(state.cvd);
-  cvdValueEl.dataset.leader =
-    state.cvd > 0 ? "buy" : state.cvd < 0 ? "sell" : "even";
-
-  const slopeLabel =
-    state.cvdSlope > 0
-      ? `↑ +${formatCompact(state.cvdSlope)} (30s)`
-      : state.cvdSlope < 0
-        ? `↓ −${formatCompact(Math.abs(state.cvdSlope))} (30s)`
-        : "→ flat (30s)";
-  cvdSlopeEl.textContent = slopeLabel;
-  cvdSlopeEl.dataset.leader =
-    state.cvdSlope > 0 ? "buy" : state.cvdSlope < 0 ? "sell" : "even";
-
-  const recentTotal = state.recentBuyVolume + state.recentSellVolume;
-  const buyPct = recentTotal > 0 ? (state.recentBuyVolume / recentTotal) * 100 : 50;
-  const sellPct = recentTotal > 0 ? (state.recentSellVolume / recentTotal) * 100 : 50;
-  aggressionBuy.style.width = `${buyPct}%`;
-  aggressionSell.style.width = `${sellPct}%`;
-  aggressionBar.dataset.leader = state.aggression;
-
-  aggressionMetaEl.innerHTML = `
-    <span class="verdict-buy">Market buys ${formatCompact(state.recentBuyVolume)}</span>
-    <span class="verdict-sell">Market sells ${formatCompact(state.recentSellVolume)}</span>`;
-
-  tapeEl.innerHTML =
-    state.tape.length === 0
-      ? `<div class="tape-empty">Waiting for trades…</div>`
-      : state.tape
-          .map(
-            (trade) => `
-    <div class="tape-row ${trade.side}-tape">
-      <span class="tape-time">${formatTradeTime(trade.time)}</span>
-      <span class="tape-price">${formatPrice(trade.price)}</span>
-      <span class="tape-size">${formatCompact(trade.quantity)}</span>
-      <span class="tape-side">${trade.side === "buy" ? "BUY" : "SELL"}</span>
-    </div>`,
-          )
-          .join("");
 }
 
 function renderWalls(state: OrderBookState): void {
@@ -394,6 +313,16 @@ function renderSessions(): void {
 
 function renderShell(): string {
   return `
+    <section class="chart-fullbleed">
+      <section class="chart-panel">
+        <div id="tv_chart" class="tv-chart"></div>
+        <div class="chart-legend">
+          <span class="legend-item legend-support">— Support (top ${currentSrCount} buy walls)</span>
+          <span class="legend-item legend-resistance">— Resistance (top ${currentSrCount} sell walls)</span>
+        </div>
+      </section>
+    </section>
+
     <div class="layout">
       <header class="header">
         <div class="brand">
@@ -442,7 +371,6 @@ function renderShell(): string {
 
       <section class="stream-info">
         <span id="status" data-status="connecting">Connecting…</span>
-        <span id="trade-status" data-status="connecting">Trades connecting…</span>
         <code id="stream-url"></code>
       </section>
 
@@ -455,48 +383,8 @@ function renderShell(): string {
         <p id="sessions-summary" class="sessions-summary"></p>
       </section>
 
-      <div class="workspace">
-        <section class="chart-panel">
-          <div id="tv_chart" class="tv-chart"></div>
-          <div class="chart-legend">
-            <span class="legend-item legend-support">— Support (top ${currentSrCount} buy walls)</span>
-            <span class="legend-item legend-resistance">— Resistance (top ${currentSrCount} sell walls)</span>
-          </div>
-        </section>
-
-        <div class="book-side">
-          <section class="aggression-panel">
-            <div class="aggression-head">
-              <span class="aggression-title">Market aggression</span>
-              <span class="aggression-subtitle">Resting orders are passive · market orders hit them</span>
-            </div>
-
-            <div id="aggression-headline" class="aggression-headline" data-leader="even">Balanced aggression</div>
-
-            <div class="cvd-row">
-              <div class="cvd-block">
-                <span class="cvd-label">CVD</span>
-                <span id="cvd-value" class="cvd-value" data-leader="even">0</span>
-              </div>
-              <div id="cvd-slope" class="cvd-slope" data-leader="even">→ flat (30s)</div>
-            </div>
-
-            <div class="fight-row-label">Last 60s market volume</div>
-            <div id="aggression-meta" class="aggression-meta"></div>
-            <div id="aggression-bar" class="battle-bar">
-              <div id="aggression-buy" class="battle-fill bid-fill"></div>
-              <div id="aggression-sell" class="battle-fill ask-fill"></div>
-            </div>
-
-            <div class="fight-row-label">Time &amp; Sales</div>
-            <div class="tape-head">
-              <span>Time</span>
-              <span>Price</span>
-              <span>Size</span>
-              <span>Side</span>
-            </div>
-            <div id="tape" class="tape"></div>
-          </section>
+      <div class="book-side">
+          <p class="book-note">Resting orders are passive · market orders</p>
 
           <main class="orderbook">
             <div class="col-head">
@@ -517,7 +405,6 @@ function renderShell(): string {
           </main>
 
           <p id="depth-meta" class="depth-meta"></p>
-        </div>
       </div>
     </div>`;
 }
@@ -526,10 +413,8 @@ updateStreamUrl();
 renderSessions();
 window.setInterval(renderSessions, 30_000);
 stream.connect();
-tradeStream.connect(currentSymbol, currentMarket);
 void chart.load(currentSymbol, currentMarket, currentTimeframe);
 
 window.addEventListener("beforeunload", () => {
   stream.disconnect();
-  tradeStream.disconnect();
 });
