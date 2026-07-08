@@ -32,6 +32,10 @@ const INTERVAL_SECONDS: Record<string, number> = {
   "1d": 24 * 60 * 60,
 };
 
+// Binance returns at most 1500 klines per request.
+const KLINES_PER_REQUEST = 1500;
+const KLINES_TARGET = 4500;
+
 export class PriceChart {
   private chart: IChartApi;
   private series: ISeriesApi<"Candlestick">;
@@ -77,7 +81,7 @@ export class PriceChart {
     this.stopPolling();
     this.clearLines();
 
-    const candles = await fetchKlines(symbol, market, interval, 300);
+    const candles = await fetchKlines(symbol, market, interval, KLINES_TARGET);
     if (generation !== this.generation) return;
 
     this.series.setData(candles);
@@ -202,23 +206,51 @@ async function fetchKlines(
   symbol: string,
   market: Market,
   interval: string,
-  limit: number,
+  targetCount = KLINES_TARGET,
 ): Promise<CandlestickData[]> {
   const base =
     market === "futures"
       ? "https://fapi.binance.com/fapi/v1/klines"
       : "https://api.binance.com/api/v3/klines";
-  const response = await fetch(
-    `${base}?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`,
-  );
-  if (!response.ok) throw new Error(`Klines failed (${response.status})`);
 
-  const rows = (await response.json()) as KlineTuple[];
-  return rows.map((row) => ({
-    time: (row[0] / 1000 + TZ_OFFSET_SECONDS) as UTCTimestamp,
-    open: parseFloat(row[1]),
-    high: parseFloat(row[2]),
-    low: parseFloat(row[3]),
-    close: parseFloat(row[4]),
-  }));
+  const batches: CandlestickData[][] = [];
+  let endTime: number | undefined;
+
+  while (batches.reduce((sum, batch) => sum + batch.length, 0) < targetCount) {
+    const limit = Math.min(KLINES_PER_REQUEST, targetCount - batches.reduce((sum, b) => sum + b.length, 0));
+    const params = new URLSearchParams({
+      symbol: symbol.toUpperCase(),
+      interval,
+      limit: String(limit),
+    });
+    if (endTime !== undefined) params.set("endTime", String(endTime));
+
+    const response = await fetch(`${base}?${params}`);
+    if (!response.ok) throw new Error(`Klines failed (${response.status})`);
+
+    const rows = (await response.json()) as KlineTuple[];
+    if (rows.length === 0) break;
+
+    const candles = rows.map((row) => ({
+      time: (row[0] / 1000 + TZ_OFFSET_SECONDS) as UTCTimestamp,
+      open: parseFloat(row[1]),
+      high: parseFloat(row[2]),
+      low: parseFloat(row[3]),
+      close: parseFloat(row[4]),
+    }));
+
+    batches.unshift(candles);
+    endTime = rows[0][0] - 1;
+
+    if (rows.length < limit) break;
+  }
+
+  const merged = batches.flat();
+  const seen = new Set<number>();
+  return merged.filter((candle) => {
+    const key = candle.time as number;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
