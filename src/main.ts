@@ -1,3 +1,4 @@
+import { BinanceAggTradeStream } from "./aggTradeStream";
 import { BinanceDepthStream, type ConnectionStatus } from "./depthStream";
 import { PriceChart, type SRLevel } from "./chart";
 import { formatUtcClock, getActiveSessionLabels, getSessionStatuses } from "./sessions";
@@ -67,6 +68,7 @@ const sessionsSummaryEl = document.getElementById("sessions-summary")!;
 
 const chart = new PriceChart(document.getElementById("tv_chart")!);
 let lastSRUpdate = 0;
+let chartLoadToken = 0;
 
 const stream = new BinanceDepthStream(
   { symbol: currentSymbol, depth: currentDepth, speed: currentSpeed, market: currentMarket },
@@ -78,6 +80,16 @@ const stream = new BinanceDepthStream(
     },
     onStatus: (status, message) => {
       setStatus(status, message);
+    },
+  },
+);
+
+const aggTradeStream = new BinanceAggTradeStream(
+  currentSymbol,
+  currentMarket,
+  {
+    onTrade: (trade) => {
+      chart.addAggressiveTrade(trade);
     },
   },
 );
@@ -119,7 +131,7 @@ srSelect.addEventListener("change", () => {
 timeframeSelect.addEventListener("change", () => {
   currentTimeframe = timeframeSelect.value;
   syncUrl();
-  void chart.load(currentSymbol, currentMarket, currentTimeframe);
+  void reloadChart();
 });
 
 function syncUrl(): void {
@@ -142,7 +154,14 @@ function reconnect(): void {
     speed: currentSpeed,
     market: currentMarket,
   });
-  void chart.load(currentSymbol, currentMarket, currentTimeframe);
+  aggTradeStream.update(currentSymbol, currentMarket);
+  void reloadChart();
+}
+
+async function reloadChart(): Promise<void> {
+  const token = ++chartLoadToken;
+  await chart.load(currentSymbol, currentMarket, currentTimeframe);
+  if (token !== chartLoadToken) return;
 }
 
 function updateStreamUrl(): void {
@@ -319,6 +338,8 @@ function renderShell(): string {
         <div class="chart-legend">
           <span class="legend-item legend-support">— Support (top ${currentSrCount} buy walls)</span>
           <span class="legend-item legend-resistance">— Resistance (top ${currentSrCount} sell walls)</span>
+          <span class="legend-item legend-agg-buy">▲ Aggressive buys (taker) per candle</span>
+          <span class="legend-item legend-agg-sell">▼ Aggressive sells (taker) per candle</span>
         </div>
       </section>
     </section>
@@ -413,8 +434,10 @@ updateStreamUrl();
 renderSessions();
 window.setInterval(renderSessions, 30_000);
 stream.connect();
-void chart.load(currentSymbol, currentMarket, currentTimeframe);
+aggTradeStream.connect();
+void reloadChart();
 
 window.addEventListener("beforeunload", () => {
   stream.disconnect();
+  aggTradeStream.disconnect();
 });

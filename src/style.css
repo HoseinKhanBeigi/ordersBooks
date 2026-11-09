@@ -73,6 +73,18 @@ body {
   color: var(--ask);
 }
 
+.legend-agg-buy {
+  color: var(--bid);
+}
+
+.legend-agg-sell {
+  color: var(--ask);
+}
+
+.legend-item {
+  font-family: var(--sans);
+}
+
 .book-side {
   min-width: 0;
   margin-top: 1.25rem;

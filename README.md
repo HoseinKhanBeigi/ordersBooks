@@ -1,22 +1,14 @@
 # Orders Book
 
-Real-time Binance order book with **deep depth** (20–500 levels), grouped into buckets of 5. Each wall row shows **Sum(coin)** for that group — e.g. Sum(BTC) for levels 1–5, 6–10, etc.
+Real-time Binance **limit order book** (resting bids/asks) plus **aggressive (taker) trades** on the chart.
 
 ## How it works
 
-1. **REST snapshot** — fetches full depth (`/api/v3/depth?limit=100`) for more than 20 levels
-2. **Diff WebSocket** — `wss://stream.binance.com:9443/ws/btcusdt@depth@100ms` keeps the local book updated
-3. **Group by 5** — top 100 levels → 20 wall rows per side
-4. **Sum per group** — wall strength (`▮▮▮▮▮`) is based on total coin in that 5-level bucket
+1. **Limit book** — REST depth snapshot + `@depth` WebSocket diffs (spot or futures)
+2. **Wall rows** — each price level shows size + cumulative sum; largest walls become S/R lines
+3. **Aggressive orders** — `@aggTrade` stream marks market buys/sells on the candle chart (size-filtered vs recent average)
 
-## Example (100 depth)
-
-| Group | Levels | Shows |
-|-------|--------|-------|
-| 1 | L1–L5 (near mid) | Sum(BTC) + blocks |
-| 2 | L6–L10 | Sum(BTC) + blocks |
-| … | … | … |
-| 20 | L96–L100 | Sum(BTC) + blocks |
+Passive limits sit on the book. Aggressive orders lift/hit those limits and appear as ▲ / ▼ markers at trade price.
 
 ## Run
 
@@ -26,4 +18,3 @@ npm run dev
 ```
 
 Open http://localhost:5173
-# ordersBooks
